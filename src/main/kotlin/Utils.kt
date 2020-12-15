@@ -14,14 +14,19 @@ fun <E : Map<*, *>> E?.notEmpty(): E? =
 
 
 fun ByteArray.digestSha256() =
-    MessageDigest.getInstance("SHA-256")?.let{
+    MessageDigest.getInstance("SHA-256")?.let {
         it.update(this@digestSha256)
         it.digest()
     }!!
 
-fun ByteArray.encodeBase64UrlSafe():String {
+fun ByteArray.encodeBase64UrlSafe(): String {
     val bytes = Base64.getUrlEncoder().encode(this)
-    return StringBuilder(bytes.size).apply { for (b in bytes) append(b.toChar()) }.toString()
+    return StringBuilder(bytes.size).apply {
+        for (b in bytes) {
+            val c = b.toChar()
+            if (c != '=') append(c)
+        }
+    }.toString()
 }
 
 fun ByteArray.decodeUtf8() = toString(Charsets.UTF_8)
@@ -35,14 +40,14 @@ inline fun <reified T : Any> Any?.cast(): T? = this as? T
 @Suppress("unused")
 inline fun <reified T : Any> Any.castNotNull(): T = this as T
 
-fun<T:Comparable<T>> minComparable(a:T,b:T):T = if (a <= b) a else b
-fun<T:Comparable<T>> maxComparable(a:T,b:T):T = if (a >= b) a else b
+fun <T : Comparable<T>> minComparable(a: T, b: T): T = if (a <= b) a else b
+fun <T : Comparable<T>> maxComparable(a: T, b: T): T = if (a >= b) a else b
 
-fun <T:Any> MutableCollection<T>.removeFirst( check:(T)->Boolean ): T?{
+fun <T : Any> MutableCollection<T>.removeFirst(check: (T) -> Boolean): T? {
     val it = iterator()
-    while(it.hasNext()){
+    while (it.hasNext()) {
         val item = it.next()
-        if( check(item)){
+        if (check(item)) {
             it.remove()
             return item
         }
