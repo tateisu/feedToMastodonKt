@@ -1,0 +1,57 @@
+
+## Twitterからデータを読む時に使うAPIキーなどを書きます。
+twitterApi
+    apiKey xxxxx
+    apiSecretKey xxxxx
+    bearerToken xxxxx
+
+# mastodonへの転載を行うボットを定義します。
+botMastodon azone
+    mastodonAccessToken xxxxxxxx
+    mastodonUrlPost https://mastodon.juggler.jp/api/v1/statuses
+    mastodonUrlMedia https://mastodon.juggler.jp/api/v1/media
+
+    # このボットが転載するTwitterユーザのscreen_nameを空白区切りで書きます。
+    twitterUsers ls_akihabara Azone_LilFairy kikakubu_azone azonetonline doll_azone
+
+    # 投稿のソースにこの文字列が出たら無視します。複数回指定できます。
+    ignoreSource twittbot.net
+    ignoreSource SubwayTweeter
+
+    # 投稿の本文にこの文字列が出たら無視します。複数回指定できます。
+    ignoreWord 【定期】
+    ignoreWord 【アゾネット販売中!】
+    ignoreWord 【再入荷】
+    ignoreWord 商品発送に通常よりお時間
+    ignoreWord 住所変更等は注文済み情報には反映されません
+    ignoreWord アゾンファンクラブ特典は入会完了後から受けられます。
+    ignoreWord アゾンドールお手入れブックWEB版
+    ignoreWord お内金のお預かり
+    ignoreWord お問い合わせフォームからのメールには本文の記載はございません。
+    ignoreWord TVアニメ「アサルトリリィ BOUQUET（ブーケ）」好評放送中
+    ignoreWord 商品を買った後・予約した後に会員特典は受けられますか
+    ignoreWord 予約商品の受付開始時には、非常に混雑が予想されます
+    ignoreWord 秋葉原・池袋・名古屋・大阪・湘南の各店舗でも販売中です
+    ignoreWord 感染症対策として、「予約カード」を設置していません
+    ignoreWord 只今のお時間スムーズにご案内できます
+
+# 上と同様に、Mastodonへの転載を行うボットを定義します。
+botMastodon azurlane
+    mastodonAccessToken xxxxxxx
+    mastodonUrlPost https://mastodon.juggler.jp/api/v1/statuses
+    mastodonUrlMedia https://mastodon.juggler.jp/api/v1/media
+    twitterUsers azurlane_staff
+    originalUrlPosition 1
+
+# これはDiscordへの転載を行うボットの定義です。
+botDiscord azurlane_discord
+    twitterUsers azurlane_staff
+    discordWebHook https://discordapp.com/api/webhooks/xxxx/xxxx
+    originalUrlPosition 1
+
+#
+botMastodon test
+    mastodonAccessToken xxxxxx
+    mastodonUrlPost https://mastodon.juggler.jp/api/v1/statuses
+    mastodonUrlMedia https://mastodon.juggler.jp/api/v1/media
+    twitterUsers tateisu
