@@ -16,14 +16,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.flatMap
-import kotlin.collections.forEach
 import kotlin.collections.set
-import kotlin.collections.sorted
-import kotlin.collections.toList
-import kotlin.collections.toSet
 import kotlin.io.use
-import kotlin.system.exitProcess
 
 private val log = LogCategory("Main")
 
@@ -34,6 +28,8 @@ val configFileName by parser.option(ArgType.String, shortName = "c", fullName = 
 val debug by parser.option(ArgType.Boolean, shortName = "d", fullName = "debug", description = "show debug information").default(
 	false
 )
+
+
 val config by lazy { Config(configFileName) }
 
 fun String.sha256B64u() = encodeUtf8().digestSha256().encodeBase64UrlSafe()
