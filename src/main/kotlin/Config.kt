@@ -2,9 +2,6 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
 import org.apache.commons.text.StringEscapeUtils
 import org.intellij.lang.annotations.RegExp
 import java.io.File
@@ -67,7 +64,6 @@ class BotMastodon(override val name: String) : Bot() {
     var mastodonUrlPost = ""
     var mastodonUrlMedia = ""
 
-
     override fun closeSection(sectionName: String) {
         super.closeSection(sectionName)
         val emptyKeys = ArrayList<String>()
@@ -79,22 +75,18 @@ class BotMastodon(override val name: String) : Bot() {
 
     override suspend fun postStatus(client: HttpClient, src: JsonObject) =
         try {
-            coroutineScope {
-                withContext(Dispatchers.IO) {
-                    client.post<HttpResponse>(mastodonUrlPost) {
-                        header("Content-Type", "application/json; charset=UTF-8")
-                        header("Authorization", "Bearer $mastodonAccessToken")
-                        body = src.toString().encodeUtf8()
-                    }.let { res ->
-                        if (res.status == HttpStatusCode.OK) {
-                            res.readBytes().decodeUtf8().decodeJsonObject()
-                        } else {
-                            log.w("[$name] post failed. ${res.status}")
-                            log.w(res.readText())
-                            hasError = true
-                            null
-                        }
-                    }
+            client.post<HttpResponse>(mastodonUrlPost) {
+                header("Content-Type", "application/json; charset=UTF-8")
+                header("Authorization", "Bearer $mastodonAccessToken")
+                body = src.toString().encodeUtf8()
+            }.let { res ->
+                if (res.status == HttpStatusCode.OK) {
+                    res.readBytes().decodeUtf8().decodeJsonObject()
+                } else {
+                    log.w("[$name] post failed. ${res.status}")
+                    log.w(res.readText())
+                    hasError = true
+                    null
                 }
             }
         } catch (ex: Throwable) {
@@ -112,41 +104,44 @@ class BotDiscord(override val name: String) : Bot(), Section {
 
     var discordWebHook = ""
 
+    override fun closeSection(sectionName: String) {
+        super.closeSection(sectionName)
+        val emptyKeys = ArrayList<String>()
+        if (discordWebHook.isEmpty()) emptyKeys.add("discordWebHook")
+        if (emptyKeys.isNotEmpty()) error("$sectionName: empty ${emptyKeys.joinToString("/")}")
+    }
+
     override suspend fun postStatus(client: HttpClient, src: JsonObject) =
         try {
-            coroutineScope {
-                withContext(Dispatchers.IO) {
-                    client.post<HttpResponse>(discordWebHook) {
-                        header("Content-Type", "application/json")
-                        body = jsonObject {
-                            put("content", src["content"])
-                        }.toString().encodeUtf8()
-                    }.let{res->
-                        val content = try{
-                            res.readBytes().decodeUtf8()
-                        }catch(ex:Throwable){
-                            null
-                        }
-                        if (res.status.value in 200 until 300 ) {
-                            // 成功時に204が返ってくる場合がある
-                            if(debug) log.d("postStatus ${res.status} $content")
-                            jsonObject { put("id", "?") }
-                        } else {
-                            log.e("postStatus failed. ${res.status}")
-                            if( content!=null){
-                                val errorHtml = content
-                                    .replace("""<(style|script)[^>]*>.+?</(style|script)>""".toRegex(), " ")
-                                    .replace("""<[^>]*>""", "\n")
-                                    .let { StringEscapeUtils.unescapeHtml4(it) }
-                                    .replace("""\s+\n""", "\n")
-                                    .replace("""\n\s+\n""", "\n")
-                                    .replace("""\n+""", "\n")
-                                log.e(errorHtml)
-                            }
-                            hasError = true
-                            null
-                        }
+            client.post<HttpResponse>(discordWebHook) {
+                header("Content-Type", "application/json")
+                body = jsonObject {
+                    put("content", src["content"])
+                }.toString().encodeUtf8()
+            }.let { res ->
+                val content = try {
+                    res.readBytes().decodeUtf8()
+                } catch (ex: Throwable) {
+                    null
+                }
+                if (res.status.value in 200 until 300) {
+                    // 成功時に204が返ってくる場合がある
+                    if (debug) log.d("postStatus ${res.status} $content")
+                    jsonObject { put("id", "?") }
+                } else {
+                    log.e("postStatus failed. ${res.status}")
+                    if (content != null) {
+                        val errorHtml = content
+                            .replace("""<(style|script)[^>]*>.+?</(style|script)>""".toRegex(), " ")
+                            .replace("""<[^>]*>""", "\n")
+                            .let { StringEscapeUtils.unescapeHtml4(it) }
+                            .replace("""\s+\n""", "\n")
+                            .replace("""\n\s+\n""", "\n")
+                            .replace("""\n+""", "\n")
+                        log.e(errorHtml)
                     }
+                    hasError = true
+                    null
                 }
             }
         } catch (ex: Throwable) {
@@ -155,12 +150,6 @@ class BotDiscord(override val name: String) : Bot(), Section {
             null
         }
 
-    override fun closeSection(sectionName: String) {
-        super.closeSection(sectionName)
-        val emptyKeys = ArrayList<String>()
-        if (discordWebHook.isEmpty()) emptyKeys.add("discordWebHook")
-        if (emptyKeys.isNotEmpty()) error("$sectionName: empty ${emptyKeys.joinToString("/")}")
-    }
 }
 
 class Config(private val fileName: String) {
