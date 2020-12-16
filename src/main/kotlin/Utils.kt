@@ -3,6 +3,15 @@
 import java.security.MessageDigest
 import java.util.*
 
+fun String.isTruth() = when {
+    this == "" -> false
+    this == "0" -> false
+    this.startsWith("f", ignoreCase = true) -> false
+    this.startsWith("t", ignoreCase = true) -> true
+    this == "on" -> true
+    else -> true
+}
+
 // same as x?.let{ dst.add(it) }
 fun <T> T.addTo(dst: ArrayList<T>) = dst.add(this)
 
