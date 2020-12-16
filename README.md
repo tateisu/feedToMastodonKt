@@ -25,8 +25,16 @@ OpenJDK 64-Bit Server VM (build 25.275-b01, mixed mode)
 アプリが認識するオプションは以下の通りです。
 
 ```
--c file または --config file   設定ファイルを指定します。デフォルトは "./config.txt" です。
--d または --debug デバッグフラグを有効にします。設定すると投稿は行われません。
+Usage: feedToMastodonKt options_list
+Options:
+    --config, -c [./config.txt] -> config file { String }
+    --dryRun [false] -> don't post the data. just read tweets.
+    --verbose, -v [false] -> show verbose information
+    --verboseUrlRemove [false] -> show verbose about removing urls in tweet.
+    --debugMedia [false] -> post the media even if dry-run is specified.
+    --read, -r [10] -> count of tweets read from server { Int }
+    --dontSkipOld [false] -> don't skip tweets that is too old or already processed.
+    --help, -h -> Usage info
 ```
 
 ### 設定ファイル

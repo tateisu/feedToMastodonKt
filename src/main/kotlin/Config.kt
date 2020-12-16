@@ -126,7 +126,7 @@ class BotDiscord(override val name: String) : Bot(), Section {
                 }
                 if (res.status.value in 200 until 300) {
                     // 成功時に204が返ってくる場合がある
-                    if (debug) log.d("postStatus ${res.status} $content")
+                    log.v{"postStatus ${res.status} $content"}
                     jsonObject { put("id", "?") }
                 } else {
                     log.e("postStatus failed. ${res.status}")
