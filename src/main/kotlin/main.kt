@@ -29,7 +29,6 @@ val debug by parser.option(ArgType.Boolean, shortName = "d", fullName = "debug",
 	false
 )
 
-
 val config by lazy { Config(configFileName) }
 
 fun String.sha256B64u() = encodeUtf8().digestSha256().encodeBase64UrlSafe()
@@ -118,8 +117,10 @@ suspend fun readTwitter(cacheDir: File, client: HttpClient, screenName: String):
 		coroutineScope {
 			withContext(Dispatchers.IO) {
 				log.i("$screenName: readTwitter use http request…")
+
+				val count = 30
 				client.get<HttpResponse>(
-					"https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=${screenName}&include_rts=1&count=200"
+					"https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=$screenName&include_rts=1&count=$count"
 				) {
 					header("Authorization", "Bearer ${config.twitterApi.bearerToken}")
 				}.let { res ->
@@ -195,100 +196,103 @@ suspend fun BotMastodon.uploadMedia(client: HttpClient, data: ByteArray, mimeTyp
 		null
 	}
 
-val reTwitterStatus = """(https://twitter\.com/[^/#?]+/status/\d+)""".toRegex()
+val reTwitterStatus = """(https://twitter\.com/[^/#?]+/status/\d+|)""".toRegex()
 
 suspend fun processTweet(bot: Bot, client: HttpClient, tweet: Tweet) {
 
 	val ignoreSources = bot.ignoreSources.filter{ tweet.source?.contains(it) ?:false}.joinToString(", ")
 	if( ignoreSources.isNotEmpty()){
-		if(debug) log.d("ignoreSources $ignoreSources")
+		if(debug) log.d("[${bot.name}] ${tweet.statusUrl} ignoreSources $ignoreSources")
+		return
+	}
+
+	val ignoreWords = bot.ignoreWords.filter { tweet.text.contains(it) }.joinToString(",")
+	if (ignoreWords.isNotEmpty()) {
+		if(debug) log.d("[${bot.name}] ${tweet.statusUrl} ignoreWords $ignoreWords")
 		return
 	}
 
 	var params = jsonObject("visibility" to "unlisted")
+
 
 	var text = tweet.text
 		.replace("""[\s　]+""".toRegex(), " ")
 		.replace(reTwitterStatus) { mr -> bot.replaceLink(params, mr.groupValues[1],tweet)}
 		.trim()
 
-	tweet.replyUrl?.let { text = "$text\n( ${it} への返信)" }
-	tweet.quoteUrl?.let { text = "$text\n( ${it} への引用RT)" }
+	tweet.replyUrl?.let { text = "$text\n※ $it への返信" }
+	tweet.quoteUrl?.let { text = "$text\n※ $it への引用RT" }
 
-	val ignores = bot.ignoreWords.filter { text.contains(it) }.joinToString(",")
-	if (ignores.isNotEmpty()) {
-		if (debug) log.d("ignoreWords: $ignores")
-		return
-	}
-
-	if (bot is BotDiscord) {
-		// discord はrate limit が厳しいので、一度エラーが出たら残りは処理しない
-		if (bot.hasError) {
-			log.w("stopLight: skip ${tweet.statusUrl}.")
-			return
-		}
-
-		val discordTimeFormat = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.JAPAN)
-			.apply { timeZone = TimeZone.getTimeZone("Asia/Tokyo") }
-
-		val timeStr = discordTimeFormat.format(Date(tweet.timeMs))
-
-		// discordにはリプライ等はない。時刻とステータスURLだけを送る
-		val content = "$timeStr ${tweet.statusUrl}"
-
-		if (debug) {
-			log.d("content=$content")
-			return
-		}
-
-		params = jsonObject("content" to content)
-
-	} else if (bot is BotMastodon) {
-		val name = tweet.userFullName
-
-		// statusUrl 部分を末尾に移動する
-		val content = if (bot.originalUrlPosition) {
-			"($name)\n$text\n${tweet.statusUrl}"
-		} else {
-			"${tweet.statusUrl}\n($name)\n$text"
-		}
-
-		if (debug) {
-			log.d("content=$content")
-			return
-		}
-
-		params["status"] = content
-
-		val mediaIds = JsonArray()
-		for (media in tweet.media) {
-			if (mediaIds.size >= 4) break
-
-			// メディアを読む。読めなかったら投稿の転送も行わない
-			val data = loadMedia(client, media)
-			if (data == null) {
-				bot.hasError = true
+	when (bot) {
+		is BotDiscord -> {
+			// discord はrate limit が厳しいので、一度エラーが出たら残りは処理しない
+			if (bot.hasError) {
+				log.w("stopLight: skip ${tweet.statusUrl}.")
 				return
 			}
-			val mediaId = bot.uploadMedia(client, data.first, data.second)
-			if (mediaId == null) {
-				bot.hasError = true
+
+			val discordTimeFormat = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.JAPAN)
+				.apply { timeZone = TimeZone.getTimeZone("Asia/Tokyo") }
+
+			val timeStr = discordTimeFormat.format(Date(tweet.timeMs))
+
+			// discordにはリプライ等はない。時刻とステータスURLだけを送る
+			val content = "$timeStr ${tweet.statusUrl}"
+
+			if (debug) {
+				log.d("content=$content")
 				return
 			}
-			log.i("mediaId=$mediaId")
-			mediaIds.add(mediaId)
-		}
-		if (mediaIds.isNotEmpty()) params["media_ids"] = mediaIds
 
-	}else{
-		error("will not happen")
+			params = jsonObject("content" to content)
+
+		}
+		is BotMastodon -> {
+			val name = tweet.userFullName
+
+			// statusUrl 部分を末尾に移動する
+			val content = if (bot.originalUrlPosition) {
+				"($name)\n$text\n${tweet.statusUrl}"
+			} else {
+				"${tweet.statusUrl}\n($name)\n$text"
+			}
+
+			if (debug) {
+				log.d("content=$content")
+				return
+			}
+
+			params["status"] = content
+
+			val mediaIds = JsonArray()
+			for (media in tweet.media) {
+				if (mediaIds.size >= 4) break
+
+				// メディアを読む。読めなかったら投稿の転送も行わない
+				val data = loadMedia(client, media)
+				if (data == null) {
+					bot.hasError = true
+					return
+				}
+				val mediaId = bot.uploadMedia(client, data.first, data.second)
+				if (mediaId == null) {
+					bot.hasError = true
+					return
+				}
+				log.i("mediaId=$mediaId")
+				mediaIds.add(mediaId)
+			}
+			if (mediaIds.isNotEmpty()) params["media_ids"] = mediaIds
+
+		}
+		else -> error("will not happen")
 	}
 
 	bot.post(client, tweet.statusUrl, params)
 }
 
 fun main(args: Array<String>) {
-	HttpClient(){
+	HttpClient{
 		// timeout config
 		install(HttpTimeout) {
 			requestTimeoutMillis = 30000L
@@ -332,11 +336,14 @@ fun main(args: Array<String>) {
 					bot.digests.add(digest)
 
 					// 送信済みデータなら早い段階で処理をスキップする(post直前にもう一度確認する)
-					if (File(bot.entryDir, digest).exists()) continue
+					if (File(bot.entryDir, digest).exists()){
+						if(debug) log.d("[${bot.name}] ${tweet.statusUrl} already exists digest file.")
+						continue
+					}
 
 					// 古すぎるものは処理しない
 					if (now - tweet.timeMs >= 604800000L) {
-						// if (debug) log.d("[${bot.name}] skip too old entry ${tweet.statusUrl}")
+						if (debug) log.d("[${bot.name}] ${tweet.statusUrl} too old. (maybe RT?)")
 						continue
 					}
 

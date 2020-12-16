@@ -1,8 +1,4 @@
 class Media(src: JsonObject) {
-    companion object {
-        private val reExtension = """\..*$""".toRegex()
-    }
-
     val id = src.stringOrThrow("id_str")
     val url: String
 
@@ -57,20 +53,28 @@ class Tweet(private val src: JsonObject) {
 
     init {
         var text = src.string("text") ?: ""
+
+        // if(debug && text.contains("https://twitter.com")) log.d("raw text=$text")
+
         src.jsonObject("entities")?.jsonArray("urls")?.objectList()
-            ?.sortedByDescending { it.jsonArray("indices")?.int(0) ?: -1 }
+            ?.sortedByDescending { it.string("url")?.length ?: -1 }
             ?.forEach {
+                val shortUrl = it.string("url")
                 val expandedUrl = it.string("expanded_url")
-                val indices = it.jsonArray("indices")
-                if (indices != null && expandedUrl?.isNotEmpty() == true) {
-                    val start = indices.int(0)
-                    val end = indices.int(1)
-                    if (start != null && end != null && text.length >= end) {
-                        text = text.substring(0, start) + expandedUrl + text.substring(end)
-                    }
+                if( shortUrl?.isNotEmpty() ==true && expandedUrl?.isNotEmpty() == true){
+                    text = text.replace(shortUrl,expandedUrl)
                 }
             }
-        this.text = text.replace(reEndTcoUrl,"")
+
+        text = text.replace(reEndTcoUrl,"")
+
+        val differentUrl = "https://twitter.com/i/web/status/${this.id}"
+
+        text = text.replace(differentUrl,"").trim()
+
+        // if(debug && text.contains("https://twitter.com")) log.d("id=$id tweet.text=${text}")
+
+        this.text = text
 
         val inReplyToStatusIdStr = src.string("in_reply_to_status_id_str")
         val inReplyToScreenName = src.string("in_reply_to_screen_name")
