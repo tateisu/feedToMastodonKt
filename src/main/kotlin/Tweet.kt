@@ -30,8 +30,9 @@ class Tweet(private val src: JsonObject) {
 	private val id = src.stringOrThrow("id_str")
 	val timeMs = (id.toLong() shr 22) + 1288834974657L
 	val statusUrl = "https://twitter.com/${src.jsonObject("user")?.string("screen_name")}/status/${id}"
-	val text: String
-	val userFullName = src.jsonObject("user")?.let { it.string("name") ?: it.string("screen_name") } ?: "?"
+	val userFullName = src.jsonObject("user")
+		?.let { it.string("name")?.decodeHtmlEntities() ?: it.string("screen_name") }
+		?: "?"
 
 	val media = ArrayList<Media>().apply {
 		src.jsonObject("entities")?.jsonArray("media")?.objectList()?.forEach {
@@ -56,6 +57,8 @@ class Tweet(private val src: JsonObject) {
 	val quoteUrl: String?
 
 	val source = src.string("source")
+
+	val text: String
 
 	private val ignoreStatusIds = HashSet<String>()
 
@@ -89,9 +92,9 @@ class Tweet(private val src: JsonObject) {
 		val quotedStatus = src.jsonObject("quoted_status")?.let { Tweet(it).also { tw -> ignoreStatusIds.add(tw.id) } }
 		this.quoteUrl = quotedStatus?.statusUrl
 
-		var text = src.string("text") ?: ""
+		var text = src.string("text")?.decodeHtmlEntities() ?: ""
 
-		if (verboseUrlRemove && text.contains("https://twitter.com")) log.v { "raw text=$text" }
+		if (verboseUrlRemove && verboseContent || text.contains("https://twitter.com")) log.v { "id=$id raw text=$text" }
 
 		src.jsonObject("entities")?.jsonArray("urls")?.objectList()
 			?.sortedByDescending { it.string("url")?.length ?: -1 }

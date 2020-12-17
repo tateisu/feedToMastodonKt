@@ -2,7 +2,6 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import org.apache.commons.text.StringEscapeUtils
 import org.intellij.lang.annotations.RegExp
 import java.io.File
 import kotlin.reflect.KMutableProperty
@@ -133,7 +132,7 @@ class BotDiscord(override val name: String) : Bot(), Section {
 						val errorHtml = content
 							.replace("""<(style|script)[^>]*>.+?</(style|script)>""".toRegex(), " ")
 							.replace("""<[^>]*>""", "\n")
-							.let { StringEscapeUtils.unescapeHtml4(it) }
+							.decodeHtmlEntities()
 							.replace("""\s+\n""", "\n")
 							.replace("""\n\s+\n""", "\n")
 							.replace("""\n+""", "\n")

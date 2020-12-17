@@ -21,7 +21,7 @@ private val log = LogCategory("Main")
 val parser = ArgParser("feedToMastodonKt")
 
 val configFileName by parser
-	.option(ArgType.String, shortName = "c", fullName = "config", description = "config file")
+	.option(ArgType.String, shortName = "c", fullName = "config", description = "config file.")
 	.default("./config.txt")
 
 val dryRun by parser
@@ -31,7 +31,7 @@ val dryRun by parser
 // オプション解析後に他の条件で変更する
 var verbose = false
 val verboseOption by parser
-	.option(ArgType.Boolean, shortName = "v", fullName = "verbose", description = "show verbose information")
+	.option(ArgType.Boolean, shortName = "v", fullName = "verbose", description = "show verbose information.")
 	.default(false)
 
 val verboseUrlRemove by parser
@@ -42,12 +42,19 @@ val verboseUrlRemove by parser
 	)
 	.default(false)
 
+val verboseContent by parser
+	.option(
+		ArgType.Boolean,
+		fullName = "verboseContent",
+		description = "show verbose about content text."
+	)
+	.default(false)
 val debugMedia by parser
 	.option(ArgType.Boolean, fullName = "debugMedia", description = "post the media even if dry-run is specified.")
 	.default(false)
 
 val readCount by parser
-	.option(ArgType.Int, shortName = "r", fullName = "read", description = "count of tweets read from server")
+	.option(ArgType.Int, shortName = "r", fullName = "read", description = "count of tweets read from server.")
 	.default(10)
 
 val dontSkipOld by parser

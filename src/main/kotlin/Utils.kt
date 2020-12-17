@@ -1,5 +1,6 @@
 @file:Suppress("unused")
 
+import org.apache.commons.text.StringEscapeUtils
 import java.security.MessageDigest
 import java.util.*
 
@@ -11,6 +12,8 @@ fun String.isTruth() = when {
     this == "on" -> true
     else -> true
 }
+
+fun String.decodeHtmlEntities():String = StringEscapeUtils.unescapeHtml4(this)
 
 // same as x?.let{ dst.add(it) }
 fun <T> T.addTo(dst: ArrayList<T>) = dst.add(this)
