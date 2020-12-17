@@ -20,7 +20,7 @@ class Tweet(private val src: JsonObject) {
 
 		private val log = LogCategory("Tweet")
 
-		private val reEndTcoUrl = """\s*https://t\.co/[\w\d_]+\s*\z""".toRegex()
+		// private val reEndTcoUrl = """\s*https://t\.co/[\w\d_]+\s*\z""".toRegex()
 
 
 		val reTwitterStatus =
@@ -92,7 +92,7 @@ class Tweet(private val src: JsonObject) {
 		val quotedStatus = src.jsonObject("quoted_status")?.let { Tweet(it).also { tw -> ignoreStatusIds.add(tw.id) } }
 		this.quoteUrl = quotedStatus?.statusUrl
 
-		var text = src.string("text")?.decodeHtmlEntities() ?: ""
+		var text = (src.string("full_text") ?: src.string("text") )?.decodeHtmlEntities() ?: error("missing text or full_text")
 
 		if (verboseUrlRemove && verboseContent || text.contains("https://twitter.com")) log.v { "id=$id raw text=$text" }
 
@@ -107,11 +107,9 @@ class Tweet(private val src: JsonObject) {
 				}
 			}
 
-		text = text.replace(reEndTcoUrl, "").trim()
-
 		if (verboseUrlRemove && text.contains("https://twitter.com")) log.v { "id=$id tweet.text=$text" }
 
-		this.text = text
+		this.text = text.trim()
 	}
 
 }

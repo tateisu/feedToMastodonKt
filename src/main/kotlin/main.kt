@@ -135,8 +135,17 @@ suspend fun readTwitter(cacheDir: File, client: HttpClient, screenName: String):
 	log.v { "$screenName: readTwitter read from server." }
 
 	return try {
+		val queryString = mapOf(
+			"include_rts" to 1,
+			"tweet_mode" to "extended",
+			"count" to readCount,
+			"screen_name" to screenName
+		)
+			.map { "${it.key}=${it.value.toString().encodePercent()}" }
+			.joinToString("&")
+
 		client.get<HttpResponse>(
-			"https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=$screenName&include_rts=1&count=$readCount"
+			"https://api.twitter.com/1.1/statuses/user_timeline.json?$queryString"
 		) {
 			header("Authorization", "Bearer ${config.twitterApi.bearerToken}")
 		}.let { res ->
