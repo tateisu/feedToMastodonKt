@@ -1,6 +1,7 @@
 class Media(src: JsonObject) {
 	val id = src.stringOrThrow("id_str")
 	val url: String
+	val shortUrl = src.string("url") // "url": "https://t.co/MPn7diveVm"
 
 	init {
 		val mediaUrl = src.string("media_url_https") ?: error("missing media_url_https")
@@ -30,11 +31,15 @@ class Tweet(private val src: JsonObject) {
 	private val id = src.stringOrThrow("id_str")
 	val timeMs = (id.toLong() shr 22) + 1288834974657L
 	val statusUrl = "https://twitter.com/${src.jsonObject("user")?.string("screen_name")}/status/${id}"
+
+	val userScreenName = src.jsonObject("user")?.string("screen_name")
+		?: "?"
+
 	val userFullName = src.jsonObject("user")
 		?.let { it.string("name")?.decodeHtmlEntities() ?: it.string("screen_name") }
 		?: "?"
 
-	val media = ArrayList<Media>().apply {
+	val mediaList = ArrayList<Media>().apply {
 		src.jsonObject("entities")?.jsonArray("media")?.objectList()?.forEach {
 			try {
 				val media = Media(it)
@@ -76,6 +81,8 @@ class Tweet(private val src: JsonObject) {
 	}
 
 	init {
+		var urlConverted = false
+
 		ignoreStatusIds.add(id)
 
 		// find reply
@@ -102,13 +109,26 @@ class Tweet(private val src: JsonObject) {
 				val shortUrl = it.string("url")
 				val expandedUrl = it.string("expanded_url")
 				if (shortUrl?.isNotEmpty() == true && expandedUrl?.isNotEmpty() == true) {
-					if (verboseUrlRemove) log.v { "expand $shortUrl $expandedUrl" }
-					text = text.replace(shortUrl, if (isIgnoreStatusUrl(expandedUrl)) " " else expandedUrl)
+					urlConverted = true
+					text = if (isIgnoreStatusUrl(expandedUrl)){
+						if (verboseUrlRemove) log.v { "remove $shortUrl $expandedUrl" }
+						text.replace(shortUrl," " )
+					}else{
+						if (verboseUrlRemove) log.v { "expand $shortUrl $expandedUrl" }
+						text.replace(shortUrl, expandedUrl)
+					}
 				}
 			}
+		mediaList.forEach {  media->
+			media.shortUrl?.notEmpty()?.let{ shortUrl->
+				urlConverted = true
+				if (verboseUrlRemove) log.v { "remove $shortUrl => ${media.url}" }
+				text = text.replace(shortUrl, " ")
+			}
+		}
+		src.jsonObject("")
 
-		if (verboseUrlRemove && text.contains("https://twitter.com")) log.v { "id=$id tweet.text=$text" }
-
+		if ( text.contains("https://t.co/") || verboseUrlRemove && urlConverted ) log.v { "url converted. id=$id tweet.text=$text" }
 		this.text = text.trim()
 	}
 

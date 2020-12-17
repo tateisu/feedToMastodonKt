@@ -95,6 +95,8 @@ fun <E : List<*>> E?.notEmpty(): E? =
 fun <E : Map<*, *>> E?.notEmpty(): E? =
 	if (this?.isNotEmpty() == true) this else null
 
+fun <T : CharSequence> T?.notEmpty(): T? =
+	if (this?.isNotEmpty() == true) this else null
 
 fun ByteArray.digestSha256() =
 	MessageDigest.getInstance("SHA-256")?.let {
@@ -115,6 +117,11 @@ fun ByteArray.encodeBase64UrlSafe(): String {
 fun ByteArray.decodeUtf8() = toString(Charsets.UTF_8)
 fun String.encodeUtf8() = toByteArray(Charsets.UTF_8)
 
+
+inline fun <reified T> Any?.castOrThrow(name:String,block: T.() -> Unit){
+	if (this !is T) error("type mismatch. $name is ${T::class.qualifiedName}")
+	block()
+}
 
 // 型推論できる文脈だと型名を書かずにすむ
 @Suppress("unused")

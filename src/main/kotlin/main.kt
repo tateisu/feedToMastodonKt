@@ -5,9 +5,7 @@ import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.core.*
-import kotlinx.cli.ArgParser
-import kotlinx.cli.ArgType
-import kotlinx.cli.default
+import kotlinx.cli.*
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.text.SimpleDateFormat
@@ -18,53 +16,73 @@ import kotlin.io.use
 
 private val log = LogCategory("Main")
 
+//////////////////////////////////////////////////////////////
+// command line options
+
+val ArgTypeExplicitBoolean = ArgType.Choice(listOf(false, true), { it.isTruth() })
+
 val parser = ArgParser("feedToMastodonKt")
 
-val configFileName by parser
-	.option(ArgType.String, shortName = "c", fullName = "config", description = "config file.")
-	.default("./config.txt")
+// help のオプションは出現順に表示される
 
-val dryRun by parser
-	.option(ArgType.Boolean, fullName = "dryRun", description = "don't post the data. just read tweets.")
-	.default(false)
+val configFileName by parser.option(
+	ArgType.String,
+	shortName = "c",
+	fullName = "config",
+	description = "config file."
+).default("./config.txt")
+
+val readCount by parser.option(
+	ArgType.Int,
+	shortName = "r",
+	fullName = "readCount",
+	description = "count of tweets read from server."
+).default(10)
+
+val skipOld by parser.option(
+	ArgTypeExplicitBoolean,
+	fullName = "skipOld",
+	description = "skip tweets that is too old or already processed. default is true."
+).default(true)
+
+val post by parser.option(
+	ArgTypeExplicitBoolean,
+	shortName = "p",
+	fullName = "post",
+	description = "if set to false, just read tweets without forward posting."
+).default(true)
+
+val postMedia by parser.option(
+	ArgTypeExplicitBoolean,
+	fullName = "postMedia",
+	description = "post the media even if dry-run is specified."
+).default(false)
+
+val verboseOption by parser.option(
+	ArgType.Boolean,
+	shortName = "v",
+	fullName = "verbose",
+	description = "more verbose information."
+).default(false)
+
+val verboseContent by parser.option(
+	ArgType.Boolean,
+	fullName = "verboseContent",
+	description = "more verbose about content text."
+).default(false)
+
+val verboseUrlRemove by parser.option(
+	ArgType.Boolean,
+	fullName = "verboseUrlRemove",
+	description = "show verbose about removing urls in tweet."
+).default(false)
+
+//////////////////////////////////////////////////////////////
 
 // オプション解析後に他の条件で変更する
 var verbose = false
-val verboseOption by parser
-	.option(ArgType.Boolean, shortName = "v", fullName = "verbose", description = "show verbose information.")
-	.default(false)
 
-val verboseUrlRemove by parser
-	.option(
-		ArgType.Boolean,
-		fullName = "verboseUrlRemove",
-		description = "show verbose about removing urls in tweet."
-	)
-	.default(false)
-
-val verboseContent by parser
-	.option(
-		ArgType.Boolean,
-		fullName = "verboseContent",
-		description = "show verbose about content text."
-	)
-	.default(false)
-val debugMedia by parser
-	.option(ArgType.Boolean, fullName = "debugMedia", description = "post the media even if dry-run is specified.")
-	.default(false)
-
-val readCount by parser
-	.option(ArgType.Int, shortName = "r", fullName = "read", description = "count of tweets read from server.")
-	.default(10)
-
-val dontSkipOld by parser
-	.option(
-		ArgType.Boolean,
-		fullName = "dontSkipOld",
-		description = "don't skip tweets that is too old or already processed."
-	)
-	.default(false)
-
+// 設定ファイルを読む
 val config by lazy { Config(configFileName) }
 
 fun String.sha256B64u() = encodeUtf8().digestSha256().encodeBase64UrlSafe()
@@ -78,7 +96,7 @@ fun BotMastodon.getMastodonStatusId(statusUrl: String) =
 	}
 
 suspend fun Bot.post(client: HttpClient, statusUrl: String, postData: JsonObject) {
-	if (dryRun) return
+	if (!post) return
 
 	// 記事のURLを見て処理済みならスキップする
 	val digest = statusUrl.sha256B64u()
@@ -217,13 +235,13 @@ val reSpaces = """[\s　]+""".toRegex()
 
 suspend fun processTweet(bot: Bot, client: HttpClient, tweet: Tweet) {
 
-	val ignoreSources = bot.ignoreSources.filter { tweet.source?.contains(it) ?: false }.joinToString(", ")
+	val ignoreSources = bot.ignoreSource.filter { tweet.source?.contains(it) ?: false }.joinToString(", ")
 	if (ignoreSources.isNotEmpty()) {
 		log.v { "[${bot.name}] ${tweet.statusUrl} ignoreSources $ignoreSources" }
 		return
 	}
 
-	val ignoreWords = bot.ignoreWords.filter { tweet.text.contains(it) }.joinToString(",")
+	val ignoreWords = bot.ignoreWord.filter { tweet.text.contains(it) }.joinToString(",")
 	if (ignoreWords.isNotEmpty()) {
 		log.v { "[${bot.name}] ${tweet.statusUrl} ignoreWords $ignoreWords" }
 		return
@@ -285,10 +303,10 @@ suspend fun processTweet(bot: Bot, client: HttpClient, tweet: Tweet) {
 			params["status"] = content
 
 			val mediaIds = JsonArray()
-			for (media in tweet.media) {
+			for (media in tweet.mediaList) {
 				if (mediaIds.size >= 4) break
 
-				if (dryRun && !debugMedia) continue
+				if (!post && !postMedia) continue
 
 				// メディアを読む。読めなかったら投稿の転送も行わない
 				val data = loadMedia(client, media)
@@ -324,13 +342,12 @@ fun main(args: Array<String>) {
 
 		runBlocking {
 			parser.parse(args)
-			verbose = verboseOption || debugMedia || dryRun
-			log.v { "dryRun=$dryRun" }
-			log.v { "dontSkipOld=$dontSkipOld" }
+			verbose = verboseOption || verboseContent || verboseUrlRemove || postMedia || !post
+			log.v { "post=$post, skipOld=$skipOld" }
 
 			// 空または空白だけのignoreWordsはエラー扱い
 			for (bot in config.bots) {
-				bot.ignoreWords.forEach {
+				bot.ignoreWord.forEach {
 					if (it.isBlank()) error("[${bot.name}] ignoreWords is empty or blank.")
 				}
 			}
@@ -358,7 +375,7 @@ fun main(args: Array<String>) {
 					// ダイジェストファイルを削除しないフラグ
 					bot.digests.add(digest)
 
-					if (!dontSkipOld) {
+					if (skipOld) {
 						// 送信済みデータなら早い段階で処理をスキップする(post直前にもう一度確認する)
 						if (File(bot.entryDir, digest).exists()) {
 							log.v { "[${bot.name}] ${tweet.statusUrl} already exists digest file." }
@@ -370,6 +387,11 @@ fun main(args: Array<String>) {
 							log.v { "[${bot.name}] ${tweet.statusUrl} too old. (maybe RT?)" }
 							continue
 						}
+					}
+
+					if( bot.ignoreUsers.any{ it == tweet.userScreenName}){
+						log.v { "[${bot.name}] ${tweet.userScreenName} is in ignoreUsers" }
+						continue
 					}
 
 					processTweet(bot, client, tweet)

@@ -5,7 +5,7 @@ import io.ktor.http.*
 import org.intellij.lang.annotations.RegExp
 import java.io.File
 import kotlin.reflect.KMutableProperty
-import kotlin.reflect.KVisibility
+import kotlin.reflect.KProperty
 import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.starProjectedType
@@ -34,8 +34,9 @@ abstract class Bot : Section {
 	abstract val name: String
 
 	val twitterUsers = ArrayList<String>()
-	val ignoreWords = ArrayList<String>()
-	val ignoreSources = ArrayList<String>()
+	val ignoreWord = ArrayList<String>()
+	val ignoreSource = ArrayList<String>()
+	val ignoreUsers = ArrayList<String>()
 	var originalUrlPosition = false
 	var entryDir: File = File(".")
 
@@ -155,35 +156,6 @@ class Config(private val fileName: String) {
 		private val reComment = """\s*#.*""".toRegex()
 		private val reTwitterNames = """([A-Za-z0-9_]+)""".toRegex()
 
-
-		private fun setProperty(sectionName: String, section: Any, k: String, v: String) {
-			val prop = section.javaClass.kotlin.memberProperties
-				.filterIsInstance<KMutableProperty<*>>()
-				.firstOrNull {
-					// println("${it.name} ${it.visibility} ${it.returnType} ${  it.returnType.isSubtypeOf(String::class.starProjectedType)}")
-					it.name == k &&
-						it.visibility == KVisibility.PUBLIC &&
-						it.returnType.isSubtypeOf(String::class.starProjectedType)
-
-				} ?: error("$sectionName has no property $k")
-
-			val oldValue = prop.getter.call(section) as? String
-			if (oldValue?.isNotEmpty() == true) error("$k specified twice")
-			prop.setter.call(section, v)
-		}
-
-		private fun setPropertyBoolean(sectionName: String, section: Any, k: String, v: Boolean) {
-			val prop = section.javaClass.kotlin.memberProperties
-				.filterIsInstance<KMutableProperty<*>>()
-				.firstOrNull {
-					it.name == k &&
-						it.visibility == KVisibility.PUBLIC &&
-						it.returnType.isSubtypeOf(Boolean::class.starProjectedType)
-
-				} ?: error("$sectionName has no property $k")
-			prop.setter.call(section, v)
-		}
-
 		class LineParser(
 			val regex: Regex,
 			val proc: Config.(groupValues: List<String>) -> Unit
@@ -212,58 +184,65 @@ class Config(private val fileName: String) {
 				section = bot
 				sectionName = it[1]
 			}
-			add("""\A(apiKey|apiSecretKey|bearerToken|mastodonAccessToken|mastodonUrlPost|mastodonUrlMedia|discordWebHook)\s*(\S+)\z""") {
-				when (val s = section) {
-					null -> error("key-value $1 must be after section.")
-					else -> setProperty(sectionName, s, it[1], it[2])
-				}
-			}
-			add("""\A(originalUrlPosition)\s*(\S+)\z""") {
-				when (val s = section) {
-					null -> error("key-value $1 must be after section.")
-					else -> setPropertyBoolean(sectionName, s, it[1], it[2].isTruth())
-				}
+
+			// property that accept list of twitter screen names
+			add("""\A(twitterUsers|ignoreUsers)\s*(.+)\z""") {
+				val k = it[1]
+				val list = reTwitterNames.findAll(it[2]).map { mr -> mr.groupValues[1] }.toList()
+				if (list.isEmpty()) error("$k without valid screen names.")
+				list.forEach { v -> setProperty(k, v) }
 			}
 
-			add("""\A(twitterUsers)\s*(.+)\z""") {
-				val list = reTwitterNames.findAll(it[2]).map { mr -> mr.groupValues[1] }.toList()
-				if (list.isEmpty()) error("twitterUsers without valid screen names.")
-				when (val s = section) {
-					is Bot -> s.twitterUsers.addAll(list)
-					else -> error("unexpected '${it[1]}'.")
-				}
-			}
-			add("""\A(ignoreWord)\s*(.+)\z""") {
-				when (val s = section) {
-					is Bot -> s.ignoreWords.add(it[2])
-					else -> error("unexpected '${it[1]}'.")
-				}
-			}
-			add("""\A(ignoreSource)\s*(.+)\z""") {
-				when (val s = section) {
-					is Bot -> s.ignoreSources.add(it[2])
-					else -> error("unexpected '${it[1]}'.")
-				}
-			}
+			// other properties
+			add("""\A(\w+)\s*(.+)\z""") { setProperty(it[1], it[2]) }
 		}
 	}
 
-    val twitterApi = TwitterApi()
+	val twitterApi = TwitterApi()
 	val bots = ArrayList<Bot>()
 
 	var section: Section? = null
 	var sectionName = ""
 
+	fun setProperty(k: String, v: String) {
+		val section = this.section ?: error("property-spec $k must be after section.")
+
+		when (val prop = section.javaClass.kotlin.memberProperties.firstOrNull { it.name == k }) {
+			is KMutableProperty<*> -> when {
+				prop.returnType.isSubtypeOf(String::class.starProjectedType) -> {
+					prop.getter.call(section).castOrThrow<String>("$sectionName.$k") {
+						if (isNotEmpty()) error("$k specified twice")
+					}
+					prop.setter.call(section, v)
+				}
+
+				prop.returnType.isSubtypeOf(Boolean::class.starProjectedType) -> {
+					prop.setter.call(section, v.isTruth())
+				}
+				else -> error("$sectionName.$k is unsupported type. ${prop.returnType}")
+			}
+			is KProperty<*> -> when {
+				prop.returnType.isSubtypeOf(ArrayList::class.starProjectedType) -> {
+					prop.getter.call(section).castOrThrow<ArrayList<String>>("$sectionName.$k") {
+						add(v)
+					}
+				}
+				else -> error("$sectionName.$k is unsupported type. ${prop.returnType}")
+			}
+			else -> error("$sectionName has no property $k")
+		}
+	}
+
 	private fun closeSection() =
 		section?.closeSection(sectionName)
 
 	private fun parseLine(line: String) {
-        lineParsers.forEach { lp->
-            lp.regex.find(line)?.let {
-                lp.proc(this@Config, it.groupValues)
-                return
-            }
-        }
+		lineParsers.forEach { lp ->
+			lp.regex.find(line)?.let {
+				lp.proc(this@Config, it.groupValues)
+				return
+			}
+		}
 		error("syntax error: $line")
 	}
 
