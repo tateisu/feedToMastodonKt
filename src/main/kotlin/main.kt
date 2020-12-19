@@ -292,11 +292,7 @@ suspend fun processTweet(bot: Bot, client: HttpClient, tweet: Tweet) {
 			}
 
 			// statusUrl 部分を末尾に移動する
-			val content = if (bot.originalUrlPosition) {
-				"($name)\n$text\n${tweet.statusUrl}"
-			} else {
-				"${tweet.statusUrl}\n($name)\n$text"
-			}
+			val content = "${tweet.statusUrl}\n($name)\n$text"
 
 			log.v { "content=$content" }
 

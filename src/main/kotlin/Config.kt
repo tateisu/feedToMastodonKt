@@ -2,13 +2,14 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import org.intellij.lang.annotations.RegExp
+import org.intellij.lang.annotations.Language
 import java.io.File
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
 import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.starProjectedType
+import kotlin.reflect.typeOf
 
 
 interface Section {
@@ -37,7 +38,6 @@ abstract class Bot : Section {
 	val ignoreWord = ArrayList<String>()
 	val ignoreSource = ArrayList<String>()
 	val ignoreUsers = ArrayList<String>()
-	var originalUrlPosition = false
 	var entryDir: File = File(".")
 
 	val digests = HashSet<String>()
@@ -158,13 +158,14 @@ class Config(private val fileName: String) {
 
 		class LineParser(
 			val regex: Regex,
-			val proc: Config.(groupValues: List<String>) -> Unit
+			val proc: Config.(groupValues: List<String>) -> Unit,
 		)
 
 		val lineParsers = ArrayList<LineParser>().apply {
-			fun add(@RegExp strRegex: String, proc: Config.(List<String>) -> Unit) {
-				this.add(LineParser(strRegex.toRegex(), proc))
-			}
+
+			fun add(@Language("RegExp") strRegex: String, proc: Config.(List<String>) -> Unit) =
+				add(LineParser(strRegex.toRegex(), proc))
+
 			add("""\A(twitterApi)\z""") {
 				closeSection()
 				section = twitterApi
@@ -222,7 +223,7 @@ class Config(private val fileName: String) {
 				else -> error("$sectionName.$k is unsupported type. ${prop.returnType}")
 			}
 			is KProperty<*> -> when {
-				prop.returnType.isSubtypeOf(ArrayList::class.starProjectedType) -> {
+				prop.returnType.isSubtypeOf(typeOf<ArrayList<String>>()) -> {
 					prop.getter.call(section).castOrThrow<ArrayList<String>>("$sectionName.$k") {
 						add(v)
 					}
