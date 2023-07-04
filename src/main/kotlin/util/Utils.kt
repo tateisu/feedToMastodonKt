@@ -8,11 +8,13 @@ import org.apache.commons.text.StringEscapeUtils
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.*
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 private val log = LogCategory("Utils")
 
 
-fun Int?.notZero() = if(this==0) null else this
+fun Int?.notZero() = if (this == 0) null else this
 fun String.isTruth() = when {
     this == "" -> false
     this == "0" -> false
@@ -93,11 +95,11 @@ fun String.encodePercent(): String =
         }
     }.toString()
 
-fun Byte.parseHex():Int {
+fun Byte.parseHex(): Int {
     val c = this.toInt()
-    if( c in '0'.code .. '9'.code) return c - '0'.code
-    if( c in 'A'.code .. 'F'.code) return 10 + c - 'A'.code
-    if( c in 'a'.code .. 'f'.code) return 10 + c - 'a'.code
+    if (c in '0'.code..'9'.code) return c - '0'.code
+    if (c in 'A'.code..'F'.code) return 10 + c - 'A'.code
+    if (c in 'a'.code..'f'.code) return 10 + c - 'a'.code
     error("parseHex: code ${c} is not in hex character.")
 }
 
@@ -110,20 +112,20 @@ fun String.decodePercent(): String {
     val binDst = ByteArrayOutputStream(binSrc.size)
     var i = 0
     val end = binSrc.size
-    while( i < end){
+    while (i < end) {
         val b = binSrc[i++]
-        if(b== bytePlus){
+        if (b == bytePlus) {
             binDst.write(codeSpace)
             continue
-        }else if(b == bytePercent){
+        } else if (b == bytePercent) {
             val hexHigh = binSrc.elementAtOrNull(i++)?.parseHex()
             val hexLow = binSrc.elementAtOrNull(i++)?.parseHex()
-            if(hexHigh==null || hexLow==null){
+            if (hexHigh == null || hexLow == null) {
                 error("missing hex characters after percent.")
-            }else{
+            } else {
                 binDst.write(hexHigh.shl(4).or(hexLow))
             }
-        }else{
+        } else {
             binDst.write(b.toInt())
         }
     }
@@ -191,7 +193,7 @@ fun <T : Any> MutableCollection<T>.removeFirst(check: (T) -> Boolean): T? {
 private val reContentTypeExtra = """\s*;.*""".toRegex()
 fun guessExt(contentType: String?) =
     when (val type = contentType?.replace(reContentTypeExtra, "")) {
-        null,"" -> null
+        null, "" -> null
         "image/png" -> "png"
         "image/jpeg" -> "jpg"
         "image/gif" -> "gif"
@@ -205,10 +207,11 @@ fun guessExt(contentType: String?) =
         }
     }
 
-inline fun useHttpClient(timeout:Long = 30_000L,block:(HttpClient)->Unit){
+inline fun useHttpClient(timeout: Long = 30_000L, block: (HttpClient) -> Unit) {
     HttpClient {
         install(UserAgent) {
-            agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+            agent =
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
         }
         // timeout config
         install(HttpTimeout) {
@@ -217,4 +220,21 @@ inline fun useHttpClient(timeout:Long = 30_000L,block:(HttpClient)->Unit){
             socketTimeoutMillis = timeout
         }
     }.use { block(it) }
+}
+
+fun Long.formatDuration(): String {
+    val h1 = TimeUnit.HOURS.toMillis(1)
+    val m1 = TimeUnit.MINUTES.toMillis(1)
+    val s1 = TimeUnit.SECONDS.toMillis(1)
+    val isMinus = this < 0
+    var millis = abs(this)
+    val h = millis / h1; millis %= h1
+    val m = millis / m1; millis %= m1
+    val s = millis / s1; millis %= s1
+    return buildString {
+        if (isMinus) append("-")
+        if (h > 0) append("h$h")
+        if (h > 0 || m > 0) append("m$m")
+        append("s%d.%03d", s, millis)
+    }
 }

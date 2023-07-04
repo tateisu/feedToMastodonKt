@@ -2,26 +2,22 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import util.*
-import java.io.File
-import java.io.InputStream
-import java.io.PrintWriter
+import util.JsonObject
+import util.JsonPathDump
+import util.LogCategory
+import util.notEmpty
 
 private val log = LogCategory("Tweet")
 
-// https://syndication.twitter.com/srv/timeline-profile/screen-name/${screenName} の内部のJSONデータを探す
-private val reTweetJson = """<script id="__NEXT_DATA__" type="application/json">(.+?)</script>""".toRegex()
-
+val reTcoUrl = """(https://t.co/\w+)""".toRegex()
 val tcoResolve = HashMap<String, String>()
 val tcoNotResolved = HashSet<String>()
 
-
-
 class Media(
-    val id:String,
+    // 画像のURL
     val url: String,
+    // ディスコード用に画像ファイルをWebから見える場所に置く際に使われる
+    val id: String,
 ) {
     override fun hashCode() = url.hashCode()
     override fun equals(other: Any?) =
@@ -37,7 +33,7 @@ fun JsonObject.toMedia(): Media? =
             // 動画の場合もサムネJPEGが入る
             string("media_url_https")
                 ?.notEmpty()
-                ?.let { Media(id=id,url="$it:medium") }
+                ?.let { Media(url = "$it:medium", id = id) }
         }
 
         else -> {
@@ -48,12 +44,13 @@ fun JsonObject.toMedia(): Media? =
     }
 
 class LoadMediaResult(
-    val bytes:ByteArray,
-    val mediaType:String?,
+    val bytes: ByteArray,
+    val mediaType: String?,
 )
+
 suspend fun loadMedia(client: HttpClient, media: Media) =
     try {
-        log.i( "loadMedia ${media.url}" )
+        log.i("loadMedia ${media.url}")
         val res: HttpResponse = client.request(url = Url(media.url))
         when (res.status) {
             HttpStatusCode.OK -> LoadMediaResult(
@@ -76,15 +73,12 @@ class Tweet(
     val timeMs: Long,
     val userScreenName: String,
     var text: String,
-    val thumbnails: List<Media>,
+    val thumbnails: ArrayList<Media>,
     // screen name of RTer
     val retweetedBy: String? = null,
     val quoteTo: String? = null,
     val replyTo: String? = null,
 )
-
-
-val reTcoUrl = """(https://t.co/\w+)""".toRegex()
 
 fun JsonObject.toTweet(
     retweetedBy: String? = null,
@@ -115,8 +109,7 @@ fun JsonObject.toTweet(
 
     val timeMs = (statusId.toLong() shr 22) + 1288834974657L
 
-    // t.co URL を収集する
-    val thumbnails = ArrayList<Media>()
+    var thumbnails = ArrayList<Media>()
 
     jsonObject("legacy")
         ?.jsonObject("extended_entities")
@@ -129,9 +122,9 @@ fun JsonObject.toTweet(
                 tcoResolve[tcoUrl] = expandedUrl
             }
             val media = mediaJson.toMedia()
-            if(media == null){
+            if (media == null) {
                 log.e("parse media failed. $mediaJson")
-            }else{
+            } else {
                 thumbnails.add(media)
             }
         }
@@ -155,10 +148,10 @@ fun JsonObject.toTweet(
         val tcoUrl = mr.groupValues[1]
         val resolved = tcoResolve[tcoUrl]
         if (resolved != null) {
-            if( resolved.startsWith(statusUrl)){
+            if (resolved.startsWith(statusUrl)) {
                 statsCount("tcoSelfUrl(image?)")
                 ""
-            }else{
+            } else {
                 statsCount("tcoResolved")
                 resolved
             }
@@ -178,24 +171,25 @@ fun JsonObject.toTweet(
         "https://twitter.com/$inReplyToScreenName/status/$inReplyToStatusId"
     }
 
-    val quoteTo = if (jsonObject("legacy")?.boolean("is_quote_status") == true) {
-        val url = jsonObject("legacy")?.jsonObject("quoted_status_permalink")?.string("expanded")
-        if (url != null) {
-            statsCount("quoteHasUrl")
-            url
-        } else {
-            val quotedTweet = jsonObject("quoted_status_result")
-                ?.jsonObject("result")
-                ?.toTweet(dumper = dumper)
-            if (quotedTweet != null) {
-                statsCount("quoteHasStatus")
-                quotedTweet.statusUrl
-            } else {
-                statsCount("quoteError")
-                log.e("missing quoted Tweet. id=$statusId")
-                "(deleted?)"
-            }
-        }
+    val quotedTweet = jsonObject("quoted_status_result")
+        ?.jsonObject("result")
+        ?.toTweet(dumper = dumper)
+
+    val quotedUrl = jsonObject("legacy")
+        ?.jsonObject("quoted_status_permalink")
+        ?.string("expanded")
+
+    val quoteTo = if (quotedTweet != null) {
+        if (thumbnails.isEmpty()) thumbnails = quotedTweet.thumbnails
+        statsCount("quoteHasStatus")
+        quotedTweet.statusUrl
+    } else if (quotedUrl != null) {
+        statsCount("quoteHasUrl")
+        quotedUrl
+    } else if (jsonObject("legacy")?.boolean("is_quote_status") == true) {
+        statsCount("quoteError")
+        log.e("missing quoted Tweet. id=$statusId")
+        "(deleted?)"
     } else {
         null
     }
@@ -210,82 +204,4 @@ fun JsonObject.toTweet(
         quoteTo = quoteTo,
         replyTo = replyTo,
     )
-}
-
-fun ByteArray.parseTweetHtml(): List<Tweet> =
-    toString(Charsets.UTF_8)
-        .let { reTweetJson.find(it) }
-        ?.groupValues?.elementAtOrNull(1)
-        ?.decodeJsonObject()
-        ?.jsonObject("props")
-        ?.jsonObject("pageProps")
-        ?.jsonObject("timeline")
-        ?.jsonArray("entries")
-        ?.objectList()
-        ?.mapNotNull { src ->
-            if (src.string("type") != "tweet") {
-                null
-            } else {
-                src.jsonObject("content")?.jsonObject("tweet")
-                    ?: error("missing content.tweet")
-            }
-        }
-        ?.map { it.toTweet() }
-        ?: error("missing entries.")
-
-fun InputStream.parseTweetRss(): List<Tweet> = emptyList()
-
-/**
- * 指定したscreenNameのツイート一覧を取得する
- */
-suspend fun readTwitter(cacheDir: File, client: HttpClient, screenName: String): List<Tweet>? {
-
-    val cacheFile = File(cacheDir, "$screenName.html")
-
-    try {
-        val now = System.currentTimeMillis()
-        val lastModified = cacheFile.lastModified()
-        if (now - lastModified < 240000L) {
-            log.v { "$screenName: readTwitter: read from cache." }
-            return withContext(Dispatchers.IO) {
-                cacheFile.readBytes().parseTweetHtml()
-            }
-        }
-    } catch (ex: Throwable) {
-        log.w(ex, "$cacheFile: read twitter cache failed.")
-    }
-
-    log.v { "$screenName: readTwitter read from server." }
-
-    val url = "https://syndication.twitter.com/srv/timeline-profile/screen-name/${screenName}"
-    return try {
-        val res = client.request(url = Url(url))
-
-        val contentBytes = try {
-            res.readBytes()
-        } catch (ex: Throwable) {
-            log.e(ex, "read error: $url")
-            null
-        }
-
-        when (res.status) {
-            HttpStatusCode.OK -> {
-                val bytes = contentBytes ?: error("missing body")
-                cacheFile.writeBytes(bytes)
-                bytes.parseTweetHtml()
-            }
-
-            else -> {
-                log.e(
-                    res,
-                    caption = "readTwitter: get failed.",
-                    responseBody = contentBytes?.decodeUtf8(),
-                )
-                null
-            }
-        }
-    } catch (ex: Throwable) {
-        log.e(ex, "readTwitter: get failed. ${ex.javaClass.simpleName} ${ex.message} $url")
-        null
-    }
 }

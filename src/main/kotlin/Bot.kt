@@ -80,45 +80,36 @@ abstract class Bot : Section {
         }
     }
 
-    fun clearDigests() {
-        setup()
-        entryDir.list()?.forEach { entry ->
-            File(entryDir, entry).delete()
-        }
-    }
 
     abstract suspend fun fanOut(client: HttpClient, tweet: Tweet): JsonObject?
 
     suspend fun processTweet(client: HttpClient, tweet: Tweet) {
+
         val digest = tweet.statusUrl.sha256B64u()
+        val digestFile = File(entryDir, digest)
 
         // 投稿が取得データに含まれるなら、後処理でダイジェストファイルを削除しない
         digests.add(digest)
 
-        // 処理済みならスキップする
-        val digestFile = File(entryDir, digest)
+        if (hasError) return
 
         var isForcePost = false
 
         if (digestFile.isFile) {
+            // ダイジェストがある(過去に送信済み)
             log.v { "[$name] ${tweet.statusUrl} digestFile already exists." }
             when {
-                forcePost.contains(tweet.statusUrl) -> {
+                forcePostAll || forcePost.contains(tweet.statusUrl) -> {
                     isForcePost = true
                     tweet.text = "forcePost at ${System.currentTimeMillis()}\n${tweet.text}"
                 }
 
+                // 過去に送信したのでスキップする
                 else -> return
             }
         }
 
         if (skipOld && !isForcePost) {
-            // 送信済みデータなら早い段階で処理をスキップする(post直前にもう一度確認する)
-            if (File(entryDir, digest).exists()) {
-                log.v { "[$name] ${tweet.statusUrl} already exists digest file." }
-                return
-            }
-
             // 古すぎるものは処理しない
             val now = System.currentTimeMillis()
             if (now - tweet.timeMs >= 604800000L) {
@@ -132,20 +123,13 @@ abstract class Bot : Section {
             return
         }
 
-
-//    val ignoreSources = bot.ignoreSource.filter { tweet.source?.contains(it) ?: false }.joinToString(", ")
-//    if (ignoreSources.isNotEmpty()) {
-//        log.v { "[${bot.name}] ${tweet.statusUrl} ignoreSources $ignoreSources" }
-//        return
-//    }
-
         val ignoreWords = ignoreWord.filter { tweet.text.contains(it) }.joinToString(",")
         if (ignoreWords.isNotEmpty()) {
             log.v { "[$name] ${tweet.statusUrl} ignoreWords $ignoreWords" }
             return
         }
 
-        if(isForcePost) log.i("forcePost ${tweet.statusUrl}")
+        if (isForcePost) log.i("forcePost ${tweet.statusUrl}")
 
         val json = fanOut(client, tweet)
         if (json != null) {

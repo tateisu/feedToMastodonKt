@@ -54,11 +54,19 @@ class OptionBoolean(
 }
 
 val options = listOf(
+
     OptionString(
         desc = "[in]config file.",
         names = listOf("-c", "--config"),
         value = "./config.txt",
     ),
+
+    OptionString(
+        desc = "[in]api secrets file.",
+        names = listOf( "--apiSecrets"),
+        value = "./apiSecrets.json",
+    ),
+
     OptionString(
         desc = "[out]image save dir for discord",
         names = listOf("--imageDir"),
@@ -72,6 +80,12 @@ val options = listOf(
     OptionStringList(
         desc = "urls for does not check already-posted, comma separated or multi-time specified",
         names = listOf("--forcePost"),
+    ),
+    OptionBoolean(
+        desc = "does not check already-posted for all tweet",
+        names = listOf("--forcePostAll"),
+        value = false,
+        noArg = true,
     ),
     OptionBoolean(
         desc = "skip tweets that is too old or already processed.",
@@ -126,10 +140,12 @@ private fun findOptionBoolean(targetName: String) =
         ?: error("findOption: missing option name $targetName")
 
 var configFileName by findOptionString("--config")
+var apiSecretsFileName by findOptionString("--apiSecrets")
 
 var imageDir by findOptionString("--imageDir")
 var imageUrlPrefix by findOptionString("--imageUrlPrefix")
 var forcePost by findOptionStringList("--forcePost")
+var forcePostAll by findOptionBoolean("--forcePostAll")
 
 var skipOld by findOptionBoolean("--skipOld")
 var post by findOptionBoolean("--post")

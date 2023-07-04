@@ -48,6 +48,13 @@ class Config(private val fileName: String) {
                 section = bot
                 sectionName = it[1]
             }
+            add("""\A(botMatrix)\s*(\S+)\z""") {
+                closeSection()
+                val bot = BotMatrix(it[2])
+                bots.add(bot)
+                section = bot
+                sectionName = it[1]
+            }
 
             // property that accept list of twitter screen names
             add("""\A(twitterUsers|ignoreUsers)\s*(.+)\z""") {
