@@ -233,8 +233,8 @@ fun Long.formatDuration(): String {
     val s = millis / s1; millis %= s1
     return buildString {
         if (isMinus) append("-")
-        if (h > 0) append("h$h")
-        if (h > 0 || m > 0) append("m$m")
-        append("s%d.%03d", s, millis)
+        if (h > 0) append("${h}h")
+        if (h > 0 || m > 0) append("${m}m")
+        append("%ds%03dms".format( s, millis))
     }
 }

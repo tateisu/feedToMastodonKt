@@ -13,17 +13,6 @@ val reTcoUrl = """(https://t.co/\w+)""".toRegex()
 val tcoResolve = HashMap<String, String>()
 val tcoNotResolved = HashSet<String>()
 
-class Media(
-    // 画像のURL
-    val url: String,
-    // ディスコード用に画像ファイルをWebから見える場所に置く際に使われる
-    val id: String,
-) {
-    override fun hashCode() = url.hashCode()
-    override fun equals(other: Any?) =
-        url == (other as? Media)?.url
-}
-
 fun JsonObject.toMedia(): Media? =
     when (val mediaType = string("type")) {
         "animated_gif", "photo", "video" -> {
@@ -41,31 +30,6 @@ fun JsonObject.toMedia(): Media? =
             log.e("unknown mediaType $mediaType. ${toString()}")
             null
         }
-    }
-
-class LoadMediaResult(
-    val bytes: ByteArray,
-    val mediaType: String?,
-)
-
-suspend fun loadMedia(client: HttpClient, media: Media) =
-    try {
-        log.i("loadMedia ${media.url}")
-        val res: HttpResponse = client.request(url = Url(media.url))
-        when (res.status) {
-            HttpStatusCode.OK -> LoadMediaResult(
-                bytes = res.readBytes(),
-                mediaType = res.headers[HttpHeaders.ContentType]
-            )
-
-            else -> {
-                log.e(res, "loadMedia failed.")
-                null
-            }
-        }
-    } catch (ex: Throwable) {
-        log.w(ex, "loadMedia failed.")
-        null
     }
 
 class Tweet(

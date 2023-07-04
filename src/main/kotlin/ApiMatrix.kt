@@ -2,6 +2,7 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.delay
 import util.*
 import java.util.*
 
@@ -38,6 +39,10 @@ class ApiMatrix(
         path: String,
         params: JsonObject,
     ): JsonObject {
+
+        // Matrixはrate limitが厳しい…
+        delay(5000L)
+
         val url = "https://$server$path"
         if (verbose) {
             log.i("$method $url")

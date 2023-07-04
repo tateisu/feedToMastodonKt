@@ -1,8 +1,6 @@
 import io.ktor.client.*
 import util.JsonObject
 import util.LogCategory
-import util.guessExt
-import java.io.File
 import java.util.*
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -20,25 +18,6 @@ class BotDiscord(override val name: String) : Bot(), Section {
         if (emptyKeys.isNotEmpty()) error("$sectionName: empty ${emptyKeys.joinToString("/")}")
     }
 
-    private suspend fun imageUrl(client: HttpClient, media: Media): String {
-        log.i("imageUrl ${media.url}")
-        if (imageDir.isEmpty() || imageUrlPrefix.isEmpty()){
-            log.w("missing option imageDir=$imageDir or imageUrlPrefix=$imageUrlPrefix")
-            return media.url
-        }
-        val data = loadMedia(client, media)
-        if (data == null) {
-            hasError = true
-            log.e("loadMedia failed. ${media.url}")
-            return media.url
-        }
-        val ext = guessExt(data.mediaType) ?: "bin"
-        val saveFile = File("$imageDir/${media.id}.$ext")
-        saveFile.writeBytes(data.bytes)
-        val newUrl = "$imageUrlPrefix/${saveFile.name}"
-        log.i("imageUrl: newUrl= $newUrl")
-        return newUrl
-    }
 
     suspend fun encodeStatus(client: HttpClient, tweet: Tweet): ApiDiscord.PostParams {
 
@@ -61,7 +40,7 @@ class BotDiscord(override val name: String) : Bot(), Section {
         return ApiDiscord.PostParams(
             content = lines.joinToString("\n"),
             imageUrls = when {
-                (post || postMedia) -> tweet.thumbnails.map { imageUrl(client, it) }
+                (post || postMedia) -> tweet.thumbnails.map { publishImage(client, it) }
                 else -> emptyList()
             }
         )

@@ -256,9 +256,9 @@ suspend fun runBots(
         }
     }
 
-    // ユーザ別データ件数を表示
-    twUsers.forEach { name ->
-        log.i("$name userId=${nameToUserIds[name]} tweets=${nameToTweets[name]?.size}")
+    // データがないユーザ
+    twUsers.filter { (nameToTweets[it]?.size ?:0) == 0 }.notEmpty()?.let{
+        log.w("missing tweets: ${it.joinToString(" ")}")
     }
 
     // JSONデータ解析の統計情報を表示

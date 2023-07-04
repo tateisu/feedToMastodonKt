@@ -158,7 +158,7 @@ const urlsNoLog = [
     'https://abs.twimg.com/sticky/animations/',
     'https://syndication.twitter.com/i/jot',
     'https://abs-0.twimg.com/emoji/v2/svg/',
-    ' https://api.twitter.com/1.1/live_pipeline/update_subscriptions',
+    'https://api.twitter.com/1.1/live_pipeline/update_subscriptions',
 ];
 
 // map from url to request data
