@@ -1,67 +1,61 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
-    id 'application'
+    id "application"
+    id "org.jetbrains.kotlin.jvm" version "1.8.22"
+    id "com.github.johnrengelman.shadow" version "8.1.1"
 }
 
-group = 'jp.juggler'
-version = '1.0-SNAPSHOT'
+group = "jp.juggler"
+version = "1.0-SNAPSHOT"
+def nameMainClass = "MainKt"
 
 repositories {
-    maven { url "https://kotlin.bintray.com/kotlinx" }
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
+    def kotlinVersion = "1.8.22"
+    implementation "org.jetbrains.kotlin:kotlin-util-io:$kotlinVersion"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
 
-    implementation "org.jetbrains.kotlin:kotlin-util-io:$kotlin_version"
-    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+    def kotlinxCoroutinesVersion = "1.7.2"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesVersion"
 
-    implementation "org.jetbrains.kotlinx:kotlinx-cli:0.3"
+    def ktorVersion = "2.3.2"
+    implementation "io.ktor:ktor-client-core:$ktorVersion"
+    implementation "io.ktor:ktor-client-cio:$ktorVersion"
 
+    implementation "org.apache.commons:commons-text:1.10.0"
 
-    def ktor_version="1.4.3"
-    implementation "io.ktor:ktor-client-core:$ktor_version"
-    implementation "io.ktor:ktor-client-cio:$ktor_version"
+    implementation "org.slf4j:slf4j-simple:2.0.7"
 
-    implementation "org.apache.commons:commons-text:1.9"
+    testImplementation "junit:junit:4.+"
 }
 
 test {
     useJUnit()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
 compileKotlin {
-    kotlinOptions.jvmTarget = '1.8'
-    kotlinOptions.freeCompilerArgs += "-Xopt-in=kotlin.ExperimentalStdlibApi"
+    kotlinOptions.jvmTarget = "11"
+    kotlinOptions.freeCompilerArgs += "-opt-in=kotlin.ExperimentalStdlibApi"
 }
 
 compileTestKotlin {
-    kotlinOptions.jvmTarget = '1.8'
+    kotlinOptions.jvmTarget = "11"
 }
 
-def nameMainClass = 'MainKt'
 
 application {
     mainClassName = nameMainClass
 }
 
-task fatJar(type: Jar) {
-    archiveBaseName.set( "feedToMastodon" )
-    // sources とかjavadocとか。実行バイナリだとセットしない？
-    // archiveClassifier.set('all')
-
-    from sourceSets.main.output
-    dependsOn configurations.runtimeClasspath
-    from {
-        configurations.runtimeClasspath.findAll { it.name.endsWith('jar') }.collect { zipTree(it) }
-     //   configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
-    }{
-        exclude "META-INF/*.SF"
-        exclude "META-INF/*.DSA"
-        exclude "META-INF/*.RSA"
-    }
+jar {
     manifest {
         attributes "Manifest-Version": "1.0", "Main-Class": nameMainClass
     }

@@ -130,3 +130,7 @@ fabric.properties
 /twitterCache/
 config.txt
 
+/apiSecrets.json
+/crawl.txt
+/dump*
+/headlessData/
